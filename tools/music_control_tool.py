@@ -66,13 +66,14 @@ async def music_control_tool(args: dict) -> dict:
     elif action == "search":
         if not query:
             return {"error": "搜索需要提供 query 参数"}
+        safe_query = query.replace("\\", "\\\\").replace('"', '\\"')
         script = f'''
 tell application "{_APP_NAME}" to activate
 delay 0.5
 tell application "System Events"
     keystroke "f" using command down
     delay 0.5
-    keystroke "{query}"
+    keystroke "{safe_query}"
     delay 0.3
     key code 36
 end tell'''
