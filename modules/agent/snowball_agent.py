@@ -60,7 +60,7 @@ class SnowballAgent(AgentBase):
         self._client = Client(options)
         return self._client
 
-    async def chat(self, text: str) -> str:
+    async def chat(self, text: str, verbose: bool = True) -> str:
         """接收文字输入，返回文字回复"""
         client = await self._ensure_client()
 
@@ -71,11 +71,18 @@ class SnowballAgent(AgentBase):
         response_parts = []
         async for block in client.receive_messages():
             if isinstance(block, TextBlock):
+                if verbose:
+                    print(block.text, end="", flush=True)
                 response_parts.append(block.text)
             elif isinstance(block, ToolUseBlock):
-                pass  # 工具调用自动执行
+                if verbose:
+                    print(f"\n  🔧 {block.name}...", end="", flush=True)
             elif isinstance(block, ToolResultBlock):
-                pass  # 工具结果自动处理
+                if verbose:
+                    print(" ✓", end="", flush=True)
+
+        if verbose:
+            print()  # 换行
 
         return "".join(response_parts) if response_parts else "（无回复）"
 

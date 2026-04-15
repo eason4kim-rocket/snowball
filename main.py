@@ -70,7 +70,6 @@ async def text_mode(agent: SnowballAgent, speaker: MacOSSaySpeaker | None = None
         try:
             print("雪球 > ", end="", flush=True)
             response = await agent.chat(user_input)
-            print(response)
             if speaker:
                 await speaker.speak(response)
         except Exception as e:
@@ -101,7 +100,6 @@ async def voice_mode(agent: SnowballAgent, speaker: MacOSSaySpeaker, config: dic
         try:
             print("雪球 > ", end="", flush=True)
             response = await agent.chat(text)
-            print(response)
             await speaker.speak(response)
         except Exception as e:
             print(f"出错了：{e}")
