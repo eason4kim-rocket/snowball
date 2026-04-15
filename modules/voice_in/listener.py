@@ -42,7 +42,7 @@ class RealtimeSTTListener(VoiceInBase):
         """在 asyncio 事件循环中执行回调"""
         if self._on_text:
             result = self._on_text(text)
-            if inspect.iscoroutine(result):
+            if inspect.isawaitable(result):
                 await result
 
     async def start_listening(self, on_text: Union[Callable[[str], Awaitable[None]], Callable[[str], None]]) -> None:
