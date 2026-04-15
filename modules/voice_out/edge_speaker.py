@@ -26,29 +26,29 @@ class EdgeTTSSpeaker:
 
         print(f" 🔊 {text}")
 
+        import tempfile, subprocess, os
+        temp_path = None
         try:
             self._playing = True
 
             # 生成音频流
             communicate = edge_tts.Communicate(text, self._voice)
 
-            # 保存临时文件
-            import tempfile
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
                 temp_path = f.name
 
             await communicate.save(temp_path)
 
             # 播放
-            import subprocess, os
             proc = subprocess.Popen(["afplay", temp_path])
             await asyncio.to_thread(proc.wait)
-            os.unlink(temp_path)
 
         except Exception as e:
             print(f"Edge-TTS 错误: {e}")
         finally:
             self._playing = False
+            if temp_path and os.path.exists(temp_path):
+                os.unlink(temp_path)
 
     async def stop(self) -> None:
         """停止当前播放"""
