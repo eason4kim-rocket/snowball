@@ -1,0 +1,24 @@
+# 雪球（Snowball）配置文件
+
+agent:
+  api_type: openai-completions
+  base_url: http://localhost:11434/v1
+  model: qwen3:8b
+  max_turns: 10
+
+voice_in:
+  enabled: false
+  engine: realtime_stt
+  language: zh
+
+voice_out:
+  enabled: false
+  engine: macos_say
+  voice: Ting-Ting
+  max_length: 50
+
+memory:
+  path: SNOWBALL.md
+
+fazm:
+  enabled: true

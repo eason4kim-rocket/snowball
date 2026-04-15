@@ -1,0 +1,3 @@
+open-agent-sdk
+pydantic
+pyyaml
