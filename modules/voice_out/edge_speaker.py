@@ -40,12 +40,9 @@ class EdgeTTSSpeaker:
             await communicate.save(temp_path)
 
             # 播放
-            import subprocess
+            import subprocess, os
             proc = subprocess.Popen(["afplay", temp_path])
             await asyncio.to_thread(proc.wait)
-
-            # 删除临时文件
-            import os
             os.unlink(temp_path)
 
         except Exception as e:
