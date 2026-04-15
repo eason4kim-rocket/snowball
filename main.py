@@ -86,10 +86,9 @@ async def main():
 
     # 创建 Agent
     agent = SnowballAgent(
-        api_type=agent_cfg.get("api_type", "openai-completions"),
         base_url=agent_cfg.get("base_url", "http://localhost:11434/v1"),
         model=agent_cfg.get("model", "qwen3:8b"),
-        max_turns=agent_cfg.get("max_turns", 10),
+        max_tool_iterations=agent_cfg.get("max_tool_iterations", 10),
         memory_path=memory_path,
         tools=tools,
     )
