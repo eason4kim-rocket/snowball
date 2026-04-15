@@ -77,7 +77,7 @@ class SnowballAgent(AgentBase):
             elif isinstance(block, ToolResultBlock):
                 pass  # 工具结果自动处理
 
-        return "\n".join(response_parts) if response_parts else "（无回复）"
+        return "".join(response_parts) if response_parts else "（无回复）"
 
     async def close(self) -> None:
         """释放资源"""
