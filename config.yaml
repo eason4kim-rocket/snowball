@@ -13,8 +13,8 @@ voice_in:
 
 voice_out:
   enabled: false
-  engine: macos_say
-  voice: Ting-Ting
+  engine: edge_tts
+  voice: zh-CN-XiaoxiaoNeural
   max_length: 50
 
 memory:

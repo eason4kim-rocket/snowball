@@ -12,7 +12,7 @@ import yaml
 
 from modules.agent import SnowballAgent
 from modules.voice_in import RealtimeSTTListener
-from modules.voice_out import MacOSSaySpeaker
+from modules.voice_out import MacOSSaySpeaker, EdgeTTSSpeaker
 from tools import create_all_tools
 
 
@@ -151,10 +151,17 @@ async def main():
     # 创建 TTS（语音输出）
     speaker = None
     if args.voice or args.tts:
-        speaker = MacOSSaySpeaker(
-            voice=voice_out_cfg.get("voice", "Ting-Ting"),
-            max_length=voice_out_cfg.get("max_length", 50),
-        )
+        engine = voice_out_cfg.get("engine", "macos_say")
+        if engine == "edge_tts":
+            speaker = EdgeTTSSpeaker(
+                voice=voice_out_cfg.get("voice", "zh-CN-XiaoxiaoNeural"),
+                max_length=voice_out_cfg.get("max_length", 50),
+            )
+        else:
+            speaker = MacOSSaySpeaker(
+                voice=voice_out_cfg.get("voice", "Ting-Ting"),
+                max_length=voice_out_cfg.get("max_length", 50),
+            )
 
     try:
         if args.voice:
