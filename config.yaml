@@ -9,6 +9,7 @@ voice_in:
   enabled: false
   engine: realtime_stt
   language: zh
+  model: medium
 
 voice_out:
   enabled: false

@@ -17,7 +17,7 @@ class RealtimeSTTListener(VoiceInBase):
     def __init__(
         self,
         language: str = "zh",
-        model: str = "tiny",
+        model: str = "medium",
         silero_sensitivity: float = 0.4,
         post_speech_silence_duration: float = 0.6,
     ):

@@ -86,6 +86,7 @@ async def voice_mode(agent: SnowballAgent, speaker: MacOSSaySpeaker, config: dic
     voice_in_cfg = config.get("voice_in", {})
     listener = RealtimeSTTListener(
         language=voice_in_cfg.get("language", "zh"),
+        model=voice_in_cfg.get("model", "medium"),
     )
 
     processing = False
