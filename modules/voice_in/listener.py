@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Callable
+import inspect
+from typing import Callable, Awaitable, Union
 
 from RealtimeSTT import AudioToTextRecorder
 
@@ -25,7 +26,7 @@ class RealtimeSTTListener(VoiceInBase):
         self._silero_sensitivity = silero_sensitivity
         self._post_speech_silence_duration = post_speech_silence_duration
         self._recorder: AudioToTextRecorder | None = None
-        self._on_text: Callable[[str], None] | None = None
+        self._on_text: Callable[[str], Awaitable[None]] | Callable[[str], None] | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
 
     def _on_transcription(self, text: str) -> None:
@@ -40,9 +41,11 @@ class RealtimeSTTListener(VoiceInBase):
     async def _async_on_text(self, text: str) -> None:
         """在 asyncio 事件循环中执行回调"""
         if self._on_text:
-            self._on_text(text)
+            result = self._on_text(text)
+            if inspect.iscoroutine(result):
+                await result
 
-    async def start_listening(self, on_text: Callable[[str], None]) -> None:
+    async def start_listening(self, on_text: Union[Callable[[str], Awaitable[None]], Callable[[str], None]]) -> None:
         """开始持续监听"""
         self._on_text = on_text
         self._loop = asyncio.get_event_loop()
