@@ -67,14 +67,17 @@ class RealtimeSTTListener(VoiceInBase):
         self._thread = threading.Thread(target=self._stt_loop, daemon=True)
         self._thread.start()
         print("🎤 语音监听已启动（always-listening，无需唤醒词）")
+        print("   直接说话就行，说完停顿一下让雪球处理\n")
 
     def _stt_loop(self) -> None:
         """STT 循环：持续监听并转写"""
+        print("   [STT] 等待语音输入...")
         while self._recorder:
             try:
-                text = self._recorder.text(self._on_transcription)
+                # text() 阻塞等待一句话说完，然后调用 callback
+                self._recorder.text(self._on_transcription)
             except Exception as e:
-                print(f"\nSTT 错误: {e}")
+                print(f"\n   [STT] 错误: {e}")
                 break
 
     async def stop_listening(self) -> None:
