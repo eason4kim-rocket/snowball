@@ -42,7 +42,7 @@ class EdgeTTSSpeaker:
             # 播放
             import subprocess
             proc = subprocess.Popen(["afplay", temp_path])
-            await asyncio.create_task(asyncio.to_thread(proc.wait))
+            await asyncio.to_thread(proc.wait)
 
             # 删除临时文件
             import os
