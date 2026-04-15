@@ -1,3 +1,6 @@
 open-agent-sdk
 pydantic
 pyyaml
+RealtimeSTT
+RealtimeTTS
+pyttsx3

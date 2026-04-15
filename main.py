@@ -1,8 +1,9 @@
 """雪球（Snowball）— 你的本地 AI 助手
 
-Phase 1：终端文字交互模式
+支持：终端文字模式 / 语音交互模式
 """
 
+import argparse
 import asyncio
 import sys
 from pathlib import Path
@@ -10,6 +11,8 @@ from pathlib import Path
 import yaml
 
 from modules.agent import SnowballAgent
+from modules.voice_in import RealtimeSTTListener
+from modules.voice_out import MacOSSaySpeaker
 from tools import create_all_tools
 
 
@@ -22,20 +25,21 @@ def load_config(config_path: str = "config.yaml") -> dict:
     return {}
 
 
-def print_banner():
+def print_banner(mode: str = "text"):
     """打印启动横幅"""
-    print("""
+    mode_label = "文字模式" if mode == "text" else "语音模式"
+    print(f"""
   ╔══════════════════════════════════════╗
   ║    ❄️  雪球 Snowball v0.1.0          ║
-  ║    你的本地 AI 助手                   ║
-  ║    输入命令，输入 /quit 退出          ║
+  ║    你的本地 AI 助手 — {mode_label}       ║
+  ║    输入 /quit 退出                    ║
   ╚══════════════════════════════════════╝
     """)
 
 
-async def text_mode(agent: SnowballAgent):
+async def text_mode(agent: SnowballAgent, speaker: MacOSSaySpeaker | None = None):
     """终端文字交互模式"""
-    print_banner()
+    print_banner("text")
     print("雪球已就绪，老大请说 👊\n")
 
     while True:
@@ -59,7 +63,6 @@ async def text_mode(agent: SnowballAgent):
             continue
 
         if user_input == "/clear":
-            # TODO: reset agent history
             print("对话已清除")
             continue
 
@@ -68,17 +71,68 @@ async def text_mode(agent: SnowballAgent):
             print("雪球 > ", end="", flush=True)
             response = await agent.chat(user_input)
             print(response)
+            if speaker:
+                await speaker.speak(response)
         except Exception as e:
             print(f"出错了：{e}")
 
-        print()  # 空行分隔
+        print()
+
+
+async def voice_mode(agent: SnowballAgent, speaker: MacOSSaySpeaker, config: dict):
+    """语音交互模式：说话 → 雪球听懂 → 执行 → 语音回复"""
+    print_banner("voice")
+
+    voice_in_cfg = config.get("voice_in", {})
+    listener = RealtimeSTTListener(
+        language=voice_in_cfg.get("language", "zh"),
+    )
+
+    processing = False
+
+    async def on_speech(text: str):
+        nonlocal processing
+        if processing:
+            return
+        processing = True
+
+        print(f"\n老大 > {text}")
+        try:
+            print("雪球 > ", end="", flush=True)
+            response = await agent.chat(text)
+            print(response)
+            await speaker.speak(response)
+        except Exception as e:
+            print(f"出错了：{e}")
+        finally:
+            processing = False
+        print()
+
+    await listener.start_listening(on_speech)
+
+    print("雪球已就绪，直接说话就行 👊\n")
+
+    # 保持运行
+    try:
+        while True:
+            await asyncio.sleep(1)
+    except KeyboardInterrupt:
+        print("\n再见老大！")
+    finally:
+        await listener.stop_listening()
 
 
 async def main():
     """主入口"""
+    parser = argparse.ArgumentParser(description="雪球 — 你的本地 AI 助手")
+    parser.add_argument("--voice", action="store_true", help="启用语音交互模式")
+    parser.add_argument("--tts", action="store_true", help="启用语音输出（文字模式+语音回复）")
+    args = parser.parse_args()
+
     config = load_config()
     agent_cfg = config.get("agent", {})
     memory_cfg = config.get("memory", {})
+    voice_out_cfg = config.get("voice_out", {})
 
     # 创建自定义工具
     memory_path = memory_cfg.get("path", "SNOWBALL.md")
@@ -93,8 +147,19 @@ async def main():
         tools=tools,
     )
 
+    # 创建 TTS（语音输出）
+    speaker = None
+    if args.voice or args.tts:
+        speaker = MacOSSaySpeaker(
+            voice=voice_out_cfg.get("voice", "Ting-Ting"),
+            max_length=voice_out_cfg.get("max_length", 50),
+        )
+
     try:
-        await text_mode(agent)
+        if args.voice:
+            await voice_mode(agent, speaker, config)
+        else:
+            await text_mode(agent, speaker)
     finally:
         await agent.close()
 
