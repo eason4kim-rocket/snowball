@@ -28,6 +28,7 @@ class RealtimeSTTListener(VoiceInBase):
         self._recorder: AudioToTextRecorder | None = None
         self._on_text: Callable[[str], Awaitable[None]] | Callable[[str], None] | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
+        self.suppress_output: bool = False
 
     def _on_transcription(self, text: str) -> None:
         """RealtimeSTT 回调：检测到语音转文字后触发"""
@@ -55,8 +56,8 @@ class RealtimeSTTListener(VoiceInBase):
             language=self._language,
             silero_sensitivity=self._silero_sensitivity,
             post_speech_silence_duration=self._post_speech_silence_duration,
-            on_recording_start=lambda: print(" 🎤 听到声音...", end="", flush=True),
-            on_recording_stop=lambda: print(" 处理中...", end="", flush=True),
+            on_recording_start=lambda: None if self.suppress_output else print(" 🎤 听到声音...", end="", flush=True),
+            on_recording_stop=lambda: None if self.suppress_output else print(" 处理中...", end="", flush=True),
             spinner=False,
             enable_realtime_transcription=False,
             use_microphone=True,

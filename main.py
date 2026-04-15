@@ -95,6 +95,7 @@ async def voice_mode(agent: SnowballAgent, speaker: MacOSSaySpeaker, config: dic
         if processing:
             return
         processing = True
+        listener.suppress_output = True
 
         print(f"\n老大 > {text}")
         try:
@@ -105,6 +106,7 @@ async def voice_mode(agent: SnowballAgent, speaker: MacOSSaySpeaker, config: dic
             print(f"出错了：{e}")
         finally:
             processing = False
+            listener.suppress_output = False
         print()
 
     await listener.start_listening(on_speech)
