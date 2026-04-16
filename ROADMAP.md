@@ -217,3 +217,80 @@ snowball/
 
 按 Phase 1 → 2 → 3 → 4 顺序实现。
 Phase 1 只需终端 + 文字就能验证核心 Agent 能力，随时可以测试。
+
+---
+
+## 待办 / TODO
+
+### 🔮 AccessibilityControl 升级到纯 pyobjc（C 方案）
+
+**为什么做**：当前 `tools/accessibility_tool.py` 走的是 `osascript → AppleScript → System Events` 三层包装，实际上只能用到 AX API 的子集。A 方案（权限预检、递归查找、错误码识别）只解决了 70% 的问题，剩下的 30% 能力天花板由 AppleScript 决定：
+
+- ❌ 无法拿到元素**坐标**（x, y, width, height）
+- ❌ 无法按 (x, y) 直接点击
+- ❌ 无法枚举某元素**所有可执行动作**（AXPress/AXShowMenu/AXIncrement/AXPick…）
+- ❌ 无法获取 **AXSubrole**（同一个 role 的细分类型，比如 "close button" vs "zoom button"）
+- ❌ 对 Electron / Chrome 这类 App 的 WebView 内容看不清楚
+- ❌ `delay 0.3` 写死，无法用 `AXObserver` 实现"等 UI 就绪"
+- ❌ 菜单最多支持 3 级，深层菜单跪
+- ⚠️ 每次调用 osascript 冷启动 50–300ms，真·点击动作都要排队
+
+**怎么做**：新建 `tools/accessibility_ax_tool.py`，用 `pyobjc` 直接调用：
+
+```python
+from ApplicationServices import (
+    AXUIElementCreateApplication,
+    AXUIElementCopyAttributeValue,
+    AXUIElementPerformAction,
+    AXObserverCreate,  # 可选：观察 UI 变化
+    AXIsProcessTrusted,
+)
+from AppKit import NSWorkspace
+```
+
+关键函数骨架：
+
+- `_find_app(name)` — NSWorkspace 按 localizedName / bundleID 找进程
+- `_walk(el, max_depth=8, filter_role=None)` — 递归遍历 AX 树
+- `_find_element(app_el, name, role=None, fuzzy=True)` — 模糊 + 递归查找
+- `_click(app_name, element_name)` — `AXUIElementPerformAction(el, "AXPress")`
+- `_click_at(x, y)` — `CGEventCreateMouseEvent` + `CGEventPost`
+- `_type_text(text)` — `CGEventCreateKeyboardEvent` 直接注入
+- `_wait_for_element(app, name, timeout=5)` — 轮询 AX 树直到元素出现
+
+**能解锁什么新能力**：
+
+1. **坐标点击** — Agent 可以说"点 (1200, 800)"
+2. **动作枚举** — `AXUIElementCopyActionNames` 列出元素支持的所有动作
+3. **等 UI 就绪** — 替换写死的 `delay 0.3`，用 `AXObserver` 监听变化
+4. **焦点追踪** — `AXFocusedUIElement` 知道光标在哪
+5. **窗口操作** — `AXRaise` / `AXMinimize` / `AXZoom` 分别置前/最小化/缩放
+6. **Electron 支持** — 能读到 `AXGroup > AXWebArea > AXStaticText` 的 DOM 级元素
+
+**预估成本**：
+
+| 项目 | 时间 |
+|------|------|
+| 8 个核心 action 实现 | 4–6 小时 |
+| 单元测试 + mock | 1–2 小时 |
+| 迁移现有 AppleScript 版到降级 fallback | 1 小时 |
+| 文档 + README 补 AX 权限说明 | 0.5 小时 |
+| **合计** | **6–9 小时** |
+
+**风险点**：
+
+- `AXValue` 拆包需要 `AXValueGetType` + `AXValueGetValue`（`(x,y)` 不是直接 Python tuple）
+- 快捷键要走 `CGEventPost`（不是 AX API 的一部分），多一层依赖
+- Sonoma / Sequoia 对 AX API 有轻微语义差异，需兼容测试
+- 把 `accessibility_tool` 的 `input_schema` 加 `x/y/timeout` 字段，旧的 prompt 记忆可能要更新
+
+**何时启动**：
+
+- 先跑一段时间现有 A 方案版本，收集 Agent 真实失败场景
+- 如果发现"元素找不到 / 坐标需要 / 菜单超 3 级"的占比 > 20%，启动 C 方案
+- 否则可推迟到 v0.3
+
+参考：
+- Apple 文档 [AXUIElement API](https://developer.apple.com/documentation/applicationservices/axuielement_h)
+- pyobjc [ApplicationServices](https://pypi.org/project/pyobjc-framework-ApplicationServices/)
+- MacPython 示例 [ax_example.py](https://github.com/ronaldoussoren/pyobjc/tree/master/pyobjc-framework-ApplicationServices)

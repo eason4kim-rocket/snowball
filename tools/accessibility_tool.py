@@ -22,6 +22,63 @@ from open_agent import tool
 
 from .retry import with_retry
 
+# 权限检查缓存（None=未检查，True=已授权，False=无权限）
+_AX_PERMISSION_CACHE: bool | None = None
+
+# AppleScript 错误码映射到用户友好描述
+_AS_ERROR_CODES = {
+    "-1719": (
+        "no_ax_permission",
+        "当前进程无 Accessibility 权限。"
+        "请打开 系统设置 → 隐私与安全 → 辅助功能，"
+        "勾选运行雪球的终端或 Windsurf 或 Python。",
+    ),
+    "-1728": ("element_not_found", "未找到指定的 UI 元素（可能已关闭或名称不对）"),
+    "-10810": ("app_not_running", "目标应用未运行"),
+    "-50": ("invalid_param", "AppleScript 参数错误（检查 app/element 名称）"),
+}
+
+
+def _check_ax_permission() -> bool:
+    """快速检查是否有 Accessibility 权限（结果缓存）"""
+    global _AX_PERMISSION_CACHE
+    if _AX_PERMISSION_CACHE is not None:
+        return _AX_PERMISSION_CACHE
+
+    # 探针：读 Dock 的 UI elements（Dock 一定在跑，且不是调用者自己，
+    # 能真正触发跨进程 AX 权限检查）
+    probe = (
+        'tell application "System Events"\n'
+        "    try\n"
+        '        set _ to UI elements of process "Dock"\n'
+        '        return "ok"\n'
+        "    on error errMsg number errNum\n"
+        '        return "err:" & errNum\n'
+        "    end try\n"
+        "end tell"
+    )
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", probe],
+            capture_output=True, text=True, timeout=3,
+        )
+        out = (result.stdout or "").strip()
+        stderr = (result.stderr or "")
+        _AX_PERMISSION_CACHE = (
+            out == "ok" and "-1719" not in stderr
+        )
+    except Exception:
+        _AX_PERMISSION_CACHE = False
+    return _AX_PERMISSION_CACHE
+
+
+def _parse_applescript_error(stderr: str) -> dict:
+    """从 AppleScript 报错中识别错误码，返回结构化 error"""
+    for code, (kind, desc) in _AS_ERROR_CODES.items():
+        if code in stderr:
+            return {"error": desc, "error_kind": kind, "error_code": code}
+    return {"error": stderr.strip()}
+
 
 def _run_applescript(script: str, timeout: int = 15) -> dict:
     """执行 AppleScript 并返回结果"""
@@ -32,14 +89,17 @@ def _run_applescript(script: str, timeout: int = 15) -> dict:
             text=True,
             timeout=timeout,
         )
-        output = result.stdout.strip() if result.stdout else result.stderr.strip()
-        if result.returncode != 0 and result.stderr.strip():
-            return {"error": result.stderr.strip()}
-        return {"result": output or "执行成功"}
+        stderr = (result.stderr or "").strip()
+        if result.returncode != 0 and stderr:
+            return _parse_applescript_error(stderr)
+        # osascript 有时 returncode=0 但 stderr 仍含权限错误
+        if "-1719" in stderr:
+            return _parse_applescript_error(stderr)
+        return {"result": (result.stdout or "").strip() or "执行成功"}
     except subprocess.TimeoutExpired:
-        return {"error": "操作超时"}
+        return {"error": "操作超时", "error_kind": "timeout"}
     except Exception as e:
-        return {"error": str(e)}
+        return {"error": str(e), "error_kind": "unknown"}
 
 
 @tool(
@@ -121,6 +181,17 @@ async def accessibility_tool(args: dict) -> dict:
     keys = args.get("keys", "")
     menu_path = args.get("menu_path", "")
     window_index = args.get("window_index", 1)
+
+    # list_apps 不需要 AX 权限，其他操作需要先检查
+    if action != "list_apps" and not _check_ax_permission():
+        return {
+            "error": (
+                "❌ 当前进程无 Accessibility 权限，无法读取/操控 UI 元素。\n"
+                "修复：系统设置 → 隐私与安全 → 辅助功能 → 勾选运行雪球的"
+                "终端 / Windsurf / Python（授权后重启雪球生效）。"
+            ),
+            "error_kind": "no_ax_permission",
+        }
 
     if action == "list_apps":
         return _list_apps()
@@ -245,19 +316,31 @@ def _click_element(app: str, element_type: str, element_name: str, window_index:
             f"end tell"
         )
     elif element_name:
-        # 按名称搜索（遍历所有 UI 元素）
+        # 按名称递归查找（entire contents 返回所有嵌套元素）
+        # 模糊匹配：name / title / description / help 任一包含即匹配
+        escaped_name = element_name.replace("\\", "\\\\").replace('"', '\\"')
         script = (
             f'tell application "System Events"\n'
             f'    tell process "{app}"\n'
             f"        set targetWindow to window {window_index}\n"
-            f"        set allElements to every UI element of targetWindow\n"
+            f"        set allElements to entire contents of targetWindow\n"
             f"        repeat with e in allElements\n"
-            f'            if name of e is "{element_name}" then\n'
-            f"                click e\n"
-            f'                return "已点击: {element_name}"\n'
-            f"            end if\n"
+            f"            try\n"
+            f'                set elemName to (name of e as text)\n'
+            f'                if elemName contains "{escaped_name}" then\n'
+            f"                    click e\n"
+            f'                    return "已点击: " & elemName\n'
+            f"                end if\n"
+            f"            end try\n"
+            f"            try\n"
+            f'                set elemDesc to (description of e as text)\n'
+            f'                if elemDesc contains "{escaped_name}" then\n'
+            f"                    click e\n"
+            f'                    return "已点击(按描述): " & elemDesc\n'
+            f"                end if\n"
+            f"            end try\n"
             f"        end repeat\n"
-            f'        return "未找到元素: {element_name}"\n'
+            f'        return "未找到元素: {escaped_name}"\n'
             f"    end tell\n"
             f"end tell"
         )
@@ -309,16 +392,19 @@ def _read_value(app: str, element_type: str, element_name: str, window_index: in
             f"end tell"
         )
     elif element_name:
+        escaped_name = element_name.replace("\\", "\\\\").replace('"', '\\"')
         script = (
             f'tell application "System Events"\n'
             f'    tell process "{app}"\n'
-            f"        set allElements to every UI element of window {window_index}\n"
+            f"        set allElements to entire contents of window {window_index}\n"
             f"        repeat with e in allElements\n"
-            f'            if name of e is "{element_name}" then\n'
-            f"                return value of e\n"
-            f"            end if\n"
+            f"            try\n"
+            f'                if (name of e as text) contains "{escaped_name}" then\n'
+            f"                    return value of e\n"
+            f"                end if\n"
+            f"            end try\n"
             f"        end repeat\n"
-            f'        return "未找到元素: {element_name}"\n'
+            f'        return "未找到元素: {escaped_name}"\n'
             f"    end tell\n"
             f"end tell"
         )
@@ -416,7 +502,12 @@ def _key_press(app: str, keys: str) -> dict:
             "delete": 51, "left arrow": 123, "right arrow": 124,
             "up arrow": 126, "down arrow": 125,
         }
-        code = key_code_map.get(key_char, 36)
+        if key_char not in key_code_map:
+            return {
+                "error": f"不支持的特殊键: {key_char}",
+                "error_kind": "invalid_key",
+            }
+        code = key_code_map[key_char]
         if modifiers:
             modifier_str = "{" + ", ".join(modifiers) + "}"
             keystroke = f"key code {code} using {modifier_str}"
