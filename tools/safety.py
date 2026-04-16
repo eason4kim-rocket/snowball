@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Callable
 
@@ -100,11 +101,11 @@ class SafetyGuard:
 
         return f"⚠️ {tool_name}: {'; '.join(risks)}"
 
-    def confirm(self, tool_name: str, args: dict) -> bool:
+    async def confirm(self, tool_name: str, args: dict) -> bool:
         """请求用户确认。返回 True 表示允许执行。
 
-        注意：在异步上下文中，终端 input() 会阻塞事件循环。
-        建议 Web 模式使用 confirm_callback。
+        为避免阻塞 async 事件循环（尤其 voice_mode 下 STT 回调会堆积），
+        终端 input() 放到 asyncio.to_thread 中执行。
         """
         if not self.needs_confirmation(tool_name, args):
             return True
@@ -112,10 +113,16 @@ class SafetyGuard:
         risk = self.describe_risk(tool_name, args)
 
         if self._confirm_callback:
-            return self._confirm_callback(tool_name, risk)
+            # 回调可以是同步或异步
+            result = self._confirm_callback(tool_name, risk)
+            if asyncio.iscoroutine(result):
+                return await result
+            return result
 
-        # 终端模式：input() 确认
+        # 终端模式：在线程池里跑 input()，不阻塞事件循环
         print(f"\n{risk}")
         print(f"  参数: {args}")
-        response = input("  确认执行？(y/N) > ").strip().lower()
+        response = await asyncio.to_thread(
+            lambda: input("  确认执行？(y/N) > ").strip().lower()
+        )
         return response in ("y", "yes", "是")

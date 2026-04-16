@@ -1,5 +1,20 @@
-open-agent-sdk
+# 核心
+open-agent-sdk>=0.4.2
 pydantic
 pyyaml
+
+# 语音
 RealtimeSTT
 edge-tts
+
+# 可选：Kokoro TTS（更自然的语音）
+# kokoro-onnx
+
+# Web Dashboard
+fastapi
+uvicorn[standard]
+websockets
+
+# 测试
+pytest
+pytest-asyncio

@@ -78,7 +78,7 @@ class SnowballAgent(AgentBase):
         async def _safety_hook(event: PreToolUseEvent) -> HookDecision | None:
             if guard.needs_confirmation(event.tool_name, event.tool_input):
                 risk = guard.describe_risk(event.tool_name, event.tool_input)
-                allowed = guard.confirm(event.tool_name, event.tool_input)
+                allowed = await guard.confirm(event.tool_name, event.tool_input)
                 if not allowed:
                     return HookDecision(
                         continue_=False,
@@ -107,13 +107,27 @@ class SnowballAgent(AgentBase):
             self._last_memory_hash = memory_hash
 
     def _trim_history(self, client: Client) -> None:
-        """修剪对话历史，保留最近 N 轮（避免 token 溢出）"""
+        """修剪对话历史，保留最近 N 轮（避免 token 溢出）。
+
+        切分必须在 user 消息边界进行，否则会把 tool_use 和 tool_result
+        拆散（LLM 会报 tool_use_id mismatch）。
+        """
         history = client.message_history
-        # 每轮对话包含 user + assistant 两条消息，加上可能的 tool 消息
+        # 每轮对话含 user + assistant 两条，可能再加若干 tool_use/tool_result
         max_messages = self._max_history_turns * 3  # 宽松估计
-        if len(history) > max_messages:
-            # 保留最新的消息
-            client.message_history = history[-max_messages:]
+        if len(history) <= max_messages:
+            return
+
+        # 从末尾往前数 max_messages 条，然后向后找到第一个 role=user 的位置
+        # 从该位置开始切，保证 tool_use/tool_result 配对不被破坏
+        start = len(history) - max_messages
+        for i in range(start, len(history)):
+            msg = history[i]
+            role = msg.get("role") if isinstance(msg, dict) else getattr(msg, "role", None)
+            if role == "user":
+                client.message_history = history[i:]
+                return
+        # 兜底：找不到 user 边界就保留全部（宁可不切也不要切坏）
 
     async def clear_history(self) -> None:
         """清除对话历史（/clear 命令调用）"""

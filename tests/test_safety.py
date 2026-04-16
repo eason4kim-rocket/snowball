@@ -1,5 +1,7 @@
 """工具安全边界测试"""
 
+import asyncio
+
 from tools.safety import SafetyGuard
 
 
@@ -41,15 +43,15 @@ class TestSafetyGuard:
     def test_confirm_callback(self):
         """自定义确认回调（Web 模式）"""
         guard = SafetyGuard(confirm_callback=lambda name, risk: False)
-        assert not guard.confirm("AppleScript", {"script": "delete file"})
+        assert not asyncio.run(guard.confirm("AppleScript", {"script": "delete file"}))
 
     def test_confirm_callback_allow(self):
         guard = SafetyGuard(confirm_callback=lambda name, risk: True)
-        assert guard.confirm("AppleScript", {"script": "delete file"})
+        assert asyncio.run(guard.confirm("AppleScript", {"script": "delete file"}))
 
     def test_safe_tool_auto_allow(self):
         guard = SafetyGuard()
-        assert guard.confirm("ReadMemory", {"path": "test.md"})
+        assert asyncio.run(guard.confirm("ReadMemory", {"path": "test.md"}))
 
     def test_unknown_tool_no_confirm(self):
         guard = SafetyGuard()
