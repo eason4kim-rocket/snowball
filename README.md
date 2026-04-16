@@ -24,9 +24,9 @@
                        ▼
 ┌──────────────────────────────────────────────────────────┐
 │   模块 B：Agent 大脑（可替换）                           │
-│   open-agent-sdk + Ollama qwen3:8b                       │
+│   open-agent-sdk + Ollama qwen3:14b                      │
 │                                                          │
-│   自定义工具：AppleScript / Fazm / Mac控制 / 音乐 / 记忆 │
+│   工具：Accessibility / AppleScript / Mac控制 / 音乐 / 记忆│
 │   SNOWBALL.md 持久记忆注入                                │
 └──────────────────────┬───────────────────────────────────┘
                        │ 回复文字
@@ -50,7 +50,7 @@
 
 - macOS（Mac Mini M4 推荐）
 - Python 3.11+
-- [Ollama](https://ollama.ai) 已安装并运行 `qwen3:8b` 模型
+- [Ollama](https://ollama.ai) 已安装并运行 `qwen3:14b` 模型
 
 ### 安装
 
@@ -63,7 +63,7 @@ cd snowball
 pip install -r requirements.txt
 
 # 拉取 Ollama 模型
-ollama pull qwen3:8b
+ollama pull qwen3:14b
 ```
 
 ### 运行
@@ -88,7 +88,7 @@ python main.py --voice
 ```yaml
 agent:
   base_url: http://localhost:11434/v1   # Ollama 地址
-  model: qwen3:8b                       # LLM 模型
+  model: qwen3:14b                      # LLM 模型（推荐 14b，8b 也可用）
   max_tool_iterations: 10
 
 voice_in:
@@ -96,6 +96,9 @@ voice_in:
   engine: realtime_stt
   language: zh
   model: medium
+  wake_word:
+    enabled: false
+    words: ["雪球", "snowball"]
 
 voice_out:
   enabled: false
@@ -107,7 +110,7 @@ memory:
   path: SNOWBALL.md          # 持久记忆文件路径
 
 fazm:
-  enabled: true
+  enabled: false              # 已被 AccessibilityControl 替代
 ```
 
 ### TTS 引擎选择
@@ -124,13 +127,15 @@ fazm:
 
 | 工具 | 用途 | 示例 |
 |------|------|------|
+| AccessibilityControl | 操控任意 App 的 GUI 元素（macOS Accessibility API） | "帮我在 Safari 点击提交按钮" |
 | AppleScript | 打开 App、发邮件、控制 Safari | "打开音乐" |
 | MusicControl | 控制 AlgerMusicPlayer | "播放周杰伦" |
 | MacControl | 音量/亮度/窗口管理 | "声音大一点" |
-| FazmControl | 复杂 GUI 操作（需 Fazm App） | "帮我填表单" |
 | ReadMemory | 读取记忆文件 | 自动注入 |
 | SearchMemory | 按章节/关键词搜索记忆 | 精准查找偏好 |
 | WriteMemory | 写入/追加记忆 | 记住新偏好 |
+
+> **注意：** FazmControl 已被 AccessibilityControl 替代，Fazm 默认关闭。AccessibilityControl 使用 macOS 原生 Accessibility API（通过 System Events），无需安装额外 App。
 
 ---
 
@@ -173,11 +178,14 @@ snowball/
 │   └── voice_out/           # 模块 C：语音输出
 │
 ├── tools/                   # 自定义工具
+│   ├── accessibility_tool.py  # macOS Accessibility API（替代 Fazm）
 │   ├── applescript_tool.py
-│   ├── fazm_tool.py
+│   ├── fazm_tool.py           # 已弃用，保留兼容
 │   ├── mac_control_tool.py
 │   ├── music_control_tool.py
-│   └── memory_tool.py
+│   ├── memory_tool.py
+│   ├── retry.py               # 重试装饰器
+│   └── safety.py              # 工具安全边界
 │
 └── tests/                   # 测试套件
 ```
@@ -189,7 +197,7 @@ snowball/
 - [x] Phase 1 — Agent 核心（纯文字终端交互）
 - [x] Phase 2 — 语音输入（RealtimeSTT）
 - [x] Phase 3 — 语音输出（多引擎 TTS）
-- [ ] Phase 4 — 优化升级（Kokoro TTS、记忆增强、延迟优化）
+- [x] Phase 4 — 优化升级（Kokoro TTS、记忆增强、延迟优化、Accessibility API）
 
 详见 [ROADMAP.md](ROADMAP.md)。
 

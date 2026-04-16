@@ -10,7 +10,7 @@ class TestCreateAllTools:
 
     def test_tool_count(self):
         tools = create_all_tools()
-        assert len(tools) == 7  # applescript, fazm, mac_control, music, read_mem, search_mem, write_mem
+        assert len(tools) == 7  # accessibility, applescript, mac_control, music, read_mem, search_mem, write_mem
 
     def test_custom_memory_path(self, tmp_path):
         custom = str(tmp_path / "custom_memory.md")
