@@ -12,7 +12,7 @@ import yaml
 
 from modules.agent import SnowballAgent
 from modules.voice_in import RealtimeSTTListener
-from modules.voice_out import MacOSSaySpeaker, EdgeTTSSpeaker
+from modules.voice_out import MacOSSaySpeaker, EdgeTTSSpeaker, KokoroSpeaker, VoiceOutBase
 from tools import create_all_tools
 
 
@@ -37,7 +37,7 @@ def print_banner(mode: str = "text"):
     """)
 
 
-async def text_mode(agent: SnowballAgent, speaker: MacOSSaySpeaker | None = None):
+async def text_mode(agent: SnowballAgent, speaker: VoiceOutBase | None = None):
     """终端文字交互模式"""
     print_banner("text")
     print("雪球已就绪，老大请说 👊\n")
@@ -78,7 +78,7 @@ async def text_mode(agent: SnowballAgent, speaker: MacOSSaySpeaker | None = None
         print()
 
 
-async def voice_mode(agent: SnowballAgent, speaker: MacOSSaySpeaker, config: dict):
+async def voice_mode(agent: SnowballAgent, speaker: VoiceOutBase, config: dict):
     """语音交互模式：说话 → 雪球听懂 → 执行 → 语音回复"""
     print_banner("voice")
 
@@ -155,6 +155,11 @@ async def main():
         if engine == "edge_tts":
             speaker = EdgeTTSSpeaker(
                 voice=voice_out_cfg.get("voice", "zh-CN-XiaoxiaoNeural"),
+                max_length=voice_out_cfg.get("max_length", 50),
+            )
+        elif engine == "kokoro":
+            speaker = KokoroSpeaker(
+                voice=voice_out_cfg.get("voice", "af_heart"),
                 max_length=voice_out_cfg.get("max_length", 50),
             )
         else:

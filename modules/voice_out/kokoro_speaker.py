@@ -5,22 +5,27 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from kokoro_onnx import Kokoro
-
 from .base import VoiceOutBase
+
+try:
+    from kokoro_onnx import Kokoro
+except ImportError:
+    Kokoro = None  # type: ignore[misc,assignment]
 
 
 class KokoroSpeaker(VoiceOutBase):
-    """基于 Kokoro TTS 的自然语音输出"""
+    """基于 Kokoro TTS 的自然语音输出（需安装 kokoro-onnx）"""
 
     def __init__(self, voice: str = "af_heart", max_length: int = 50):
         self._voice = voice
         self._max_length = max_length
-        self._model: Kokoro | None = None
+        self._model = None
         self._playing = False
 
-    async def _ensure_model(self) -> Kokoro:
+    async def _ensure_model(self):
         """懒加载模型"""
+        if Kokoro is None:
+            raise ImportError("kokoro-onnx 未安装，请运行: pip install kokoro-onnx")
         if self._model is not None:
             return self._model
 

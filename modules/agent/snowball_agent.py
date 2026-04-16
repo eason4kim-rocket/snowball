@@ -28,6 +28,7 @@ class SnowballAgent(AgentBase):
         self._memory_path = Path(memory_path)
         self._custom_tools = tools or []
         self._client: Client | None = None
+        self._last_memory_hash: int = 0  # 用于检测记忆变更，避免无变化时重建 prompt
 
     def _build_system_prompt(self) -> str:
         """构建系统提示词：人格 + 记忆"""
@@ -60,9 +61,28 @@ class SnowballAgent(AgentBase):
         self._client = Client(options)
         return self._client
 
+    def _refresh_memory_if_changed(self, client: Client) -> None:
+        """仅在记忆文件有变更时刷新系统提示词（减少无变化时的开销）"""
+        if self._memory_path.exists():
+            memory = self._memory_path.read_text(encoding="utf-8")
+            memory_hash = hash(memory)
+        else:
+            memory = ""
+            memory_hash = 0
+
+        if memory_hash != self._last_memory_hash:
+            if memory:
+                client.options.system_prompt = SNOWBALL_SYSTEM_PROMPT + f"\n\n## 当前记忆\n{memory}"
+            else:
+                client.options.system_prompt = SNOWBALL_SYSTEM_PROMPT
+            self._last_memory_hash = memory_hash
+
     async def chat(self, text: str, verbose: bool = True) -> str:
         """接收文字输入，返回文字回复"""
         client = await self._ensure_client()
+
+        # 每次对话前刷新记忆（仅在文件变更时重建 prompt）
+        self._refresh_memory_if_changed(client)
 
         # 发送查询
         await client.query(text)
