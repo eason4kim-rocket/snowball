@@ -4,6 +4,8 @@ import subprocess
 
 from open_agent import tool
 
+from .retry import with_retry
+
 
 @tool(
     name="AppleScript",
@@ -28,8 +30,9 @@ from open_agent import tool
         "required": ["script"],
     },
 )
+@with_retry(max_retries=2, retry_delay=0.5)
 async def applescript_tool(args: dict) -> dict:
-    """执行 AppleScript 脚本"""
+    """执行 AppleScript 脚本（失败自动重试 2 次）"""
     script = args.get("script", "")
     app = args.get("app", "")
 

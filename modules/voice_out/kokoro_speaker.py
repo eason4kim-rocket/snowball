@@ -5,25 +5,32 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
-from kokoro_onnx import Kokoro
+from .base import VoiceOutBase
+
+try:
+    from kokoro_onnx import Kokoro
+except ImportError:
+    Kokoro = None  # type: ignore[misc,assignment]
 
 
-class KokoroSpeaker:
-    """基于 Kokoro TTS 的自然语音输出"""
+class KokoroSpeaker(VoiceOutBase):
+    """基于 Kokoro TTS 的自然语音输出（需安装 kokoro-onnx）"""
 
     def __init__(self, voice: str = "af_heart", max_length: int = 50):
         self._voice = voice
         self._max_length = max_length
-        self._model: Kokoro | None = None
+        self._model = None
         self._playing = False
 
-    async def _ensure_model(self) -> Kokoro:
+    async def _ensure_model(self):
         """懒加载模型"""
+        if Kokoro is None:
+            raise ImportError("kokoro-onnx 未安装，请运行: pip install kokoro-onnx")
         if self._model is not None:
             return self._model
 
         # 在后台线程加载模型（避免阻塞）
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         self._model = await loop.run_in_executor(
             None, lambda: Kokoro("kokoro-v0_19.onnx", device="cpu")
         )
@@ -45,7 +52,7 @@ class KokoroSpeaker:
             self._playing = True
 
             # 在后台线程生成音频
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             audio = await loop.run_in_executor(
                 None, lambda: model(text, voice=self._voice)
             )
@@ -57,7 +64,7 @@ class KokoroSpeaker:
             # 用系统播放器播放
             import subprocess
             proc = subprocess.Popen(["afplay", str(temp_path)])
-            await asyncio.create_task(asyncio.to_thread(proc.wait))
+            await asyncio.to_thread(proc.wait)
 
         except Exception as e:
             print(f"Kokoro TTS 错误: {e}")

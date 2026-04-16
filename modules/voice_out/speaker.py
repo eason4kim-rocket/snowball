@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import subprocess
 
 from .base import VoiceOutBase
@@ -33,7 +34,7 @@ class MacOSSaySpeaker(VoiceOutBase):
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
             )
-            self._process.wait()
+            await asyncio.to_thread(self._process.wait)
         except Exception as e:
             print(f"TTS 错误: {e}")
         finally:

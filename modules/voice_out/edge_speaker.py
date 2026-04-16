@@ -6,8 +6,10 @@ import asyncio
 
 import edge_tts
 
+from .base import VoiceOutBase
 
-class EdgeTTSSpeaker:
+
+class EdgeTTSSpeaker(VoiceOutBase):
     """基于 Edge-TTS 的自然语音输出（微软免费 API）"""
 
     def __init__(self, voice: str = "zh-CN-XiaoxiaoNeural", max_length: int = 50):

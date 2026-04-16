@@ -6,9 +6,12 @@ import asyncio
 import inspect
 from typing import Callable, Awaitable, Union
 
-from RealtimeSTT import AudioToTextRecorder
-
 from .base import VoiceInBase
+
+try:
+    from RealtimeSTT import AudioToTextRecorder
+except ImportError:
+    AudioToTextRecorder = None  # type: ignore[misc,assignment]
 
 
 class RealtimeSTTListener(VoiceInBase):
@@ -48,8 +51,10 @@ class RealtimeSTTListener(VoiceInBase):
 
     async def start_listening(self, on_text: Union[Callable[[str], Awaitable[None]], Callable[[str], None]]) -> None:
         """开始持续监听"""
+        if AudioToTextRecorder is None:
+            raise ImportError("RealtimeSTT 未安装，请运行: pip install RealtimeSTT")
         self._on_text = on_text
-        self._loop = asyncio.get_event_loop()
+        self._loop = asyncio.get_running_loop()
 
         self._recorder = AudioToTextRecorder(
             model=self._model,
