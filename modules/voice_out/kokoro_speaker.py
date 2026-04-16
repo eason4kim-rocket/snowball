@@ -7,8 +7,10 @@ from pathlib import Path
 
 from kokoro_onnx import Kokoro
 
+from .base import VoiceOutBase
 
-class KokoroSpeaker:
+
+class KokoroSpeaker(VoiceOutBase):
     """基于 Kokoro TTS 的自然语音输出"""
 
     def __init__(self, voice: str = "af_heart", max_length: int = 50):
@@ -23,7 +25,7 @@ class KokoroSpeaker:
             return self._model
 
         # 在后台线程加载模型（避免阻塞）
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         self._model = await loop.run_in_executor(
             None, lambda: Kokoro("kokoro-v0_19.onnx", device="cpu")
         )
@@ -45,7 +47,7 @@ class KokoroSpeaker:
             self._playing = True
 
             # 在后台线程生成音频
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             audio = await loop.run_in_executor(
                 None, lambda: model(text, voice=self._voice)
             )
@@ -57,7 +59,7 @@ class KokoroSpeaker:
             # 用系统播放器播放
             import subprocess
             proc = subprocess.Popen(["afplay", str(temp_path)])
-            await asyncio.create_task(asyncio.to_thread(proc.wait))
+            await asyncio.to_thread(proc.wait)
 
         except Exception as e:
             print(f"Kokoro TTS 错误: {e}")

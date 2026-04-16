@@ -4,7 +4,14 @@ from pathlib import Path
 
 from open_agent import tool
 
-_MEMORY_PATH = "SNOWBALL.md"
+# 默认路径，可通过 configure_memory_path() 覆盖
+_memory_path: str = "SNOWBALL.md"
+
+
+def configure_memory_path(path: str) -> None:
+    """设置记忆文件路径（由 create_all_tools 调用）"""
+    global _memory_path
+    _memory_path = path
 
 
 @tool(
@@ -14,7 +21,7 @@ _MEMORY_PATH = "SNOWBALL.md"
 )
 async def read_memory_tool(args: dict) -> dict:
     """读取记忆文件"""
-    path = Path(_MEMORY_PATH)
+    path = Path(_memory_path)
     if not path.exists():
         return {"result": "记忆文件不存在"}
     try:
@@ -50,7 +57,7 @@ async def write_memory_tool(args: dict) -> dict:
     """写入记忆文件"""
     content = args.get("content", "")
     append = args.get("append", True)
-    path = Path(_MEMORY_PATH)
+    path = Path(_memory_path)
 
     try:
         if append and path.exists():
