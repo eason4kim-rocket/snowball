@@ -10,6 +10,9 @@ voice_in:
   engine: realtime_stt
   language: zh
   model: medium
+  wake_word:
+    enabled: false
+    words: ["雪球", "snowball"]
 
 voice_out:
   enabled: false

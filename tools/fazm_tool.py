@@ -5,6 +5,8 @@ import subprocess
 
 from open_agent import tool
 
+from .retry import with_retry
+
 _FAZM_CONTROL_TEMPLATE = '''
 import Foundation
 DistributedNotificationCenter.default().postNotificationName(
@@ -56,8 +58,9 @@ _STATE_FILE = "/tmp/fazm-control-state.json"
         "required": ["action"],
     },
 )
+@with_retry(max_retries=2, retry_delay=1.0)
 async def fazm_tool(args: dict) -> dict:
-    """通过 Fazm 执行 GUI 操作"""
+    """通过 Fazm 执行 GUI 操作（失败自动重试 2 次）"""
     action = args.get("action", "query")
     text = args.get("text", "")
 

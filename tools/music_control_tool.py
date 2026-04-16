@@ -4,6 +4,8 @@ import subprocess
 
 from open_agent import tool
 
+from .retry import with_retry
+
 _APP_NAME = "AlgerMusicPlayer"
 
 
@@ -55,6 +57,7 @@ def _run_applescript(script: str, timeout: int = 10) -> dict:
         "required": ["action"],
     },
 )
+@with_retry(max_retries=2, retry_delay=0.5)
 async def music_control_tool(args: dict) -> dict:
     action = args.get("action", "")
     query = args.get("query", "")

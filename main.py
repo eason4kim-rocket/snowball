@@ -12,6 +12,7 @@ import yaml
 
 from modules.agent import SnowballAgent
 from modules.voice_in import RealtimeSTTListener
+from modules.voice_in.wake_word import WakeWordDetector
 from modules.voice_out import MacOSSaySpeaker, EdgeTTSSpeaker, KokoroSpeaker, VoiceOutBase
 from tools import create_all_tools
 
@@ -63,15 +64,18 @@ async def text_mode(agent: SnowballAgent, speaker: VoiceOutBase | None = None):
             continue
 
         if user_input == "/clear":
-            print("对话已清除")
+            await agent.clear_history()
+            print("对话已清除（上下文已重置）")
             continue
 
-        # 发送给 Agent
+        # 发送给 Agent（流式输出 + 流式 TTS）
         try:
             print("雪球 > ", end="", flush=True)
-            response = await agent.chat(user_input)
             if speaker:
-                await speaker.speak(response)
+                async for sentence in agent.chat_stream(user_input):
+                    await speaker.speak(sentence)
+            else:
+                await agent.chat(user_input)
         except Exception as e:
             print(f"出错了：{e}")
 
@@ -88,20 +92,41 @@ async def voice_mode(agent: SnowballAgent, speaker: VoiceOutBase, config: dict):
         model=voice_in_cfg.get("model", "medium"),
     )
 
+    # 唤醒词检测
+    wake_cfg = voice_in_cfg.get("wake_word", {})
+    wake_detector = WakeWordDetector(
+        wake_words=wake_cfg.get("words", ["雪球", "snowball"]),
+        enabled=wake_cfg.get("enabled", False),
+    )
+    if wake_detector.enabled:
+        print(f"  唤醒词已启用：{wake_detector.wake_words}")
+
     processing = False
 
     async def on_speech(text: str):
         nonlocal processing
         if processing:
             return
+
+        # 唤醒词检测
+        if not wake_detector.detect_in_text(text):
+            return  # 未检测到唤醒词，忽略
+
+        # 移除唤醒词，获取实际命令
+        command = wake_detector.strip_wake_word(text) if wake_detector.enabled else text
+        if not command.strip():
+            # 只说了唤醒词没有命令
+            await speaker.speak("在呢老大")
+            return
+
         processing = True
         listener.suppress_output = True
 
         print(f"\n老大 > {text}")
         try:
             print("雪球 > ", end="", flush=True)
-            response = await agent.chat(text)
-            await speaker.speak(response)
+            async for sentence in agent.chat_stream(command):
+                await speaker.speak(sentence)
         except Exception as e:
             print(f"出错了：{e}")
         finally:

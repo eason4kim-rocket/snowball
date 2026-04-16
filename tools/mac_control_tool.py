@@ -4,6 +4,8 @@ import subprocess
 
 from open_agent import tool
 
+from .retry import with_retry
+
 
 @tool(
     name="MacControl",
@@ -28,8 +30,9 @@ from open_agent import tool
         "required": ["operation"],
     },
 )
+@with_retry(max_retries=2, retry_delay=0.5)
 async def mac_control_tool(args: dict) -> dict:
-    """执行 macOS 系统控制"""
+    """执行 macOS 系统控制（失败自动重试 2 次）"""
     operation = args.get("operation", "")
     value = args.get("value", "")
 
