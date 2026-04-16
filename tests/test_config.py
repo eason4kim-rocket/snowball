@@ -32,6 +32,6 @@ def test_load_config_missing():
 def test_config_values():
     """测试配置值正确性"""
     config = load_config("config.yaml")
-    assert config["agent"]["model"] == "qwen3:14b"
+    assert config["agent"]["model"] == "qwen3.5:9b"
     assert config["memory"]["path"] == "SNOWBALL.md"
     assert config["voice_out"]["engine"] in ("macos_say", "edge_tts", "kokoro")

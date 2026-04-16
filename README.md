@@ -24,7 +24,7 @@
                        ▼
 ┌──────────────────────────────────────────────────────────┐
 │   模块 B：Agent 大脑（可替换）                           │
-│   open-agent-sdk + Ollama qwen3:14b                      │
+│   open-agent-sdk + Ollama qwen3.5:9b                     │
 │                                                          │
 │   工具：Accessibility / AppleScript / Mac控制 / 音乐 / 记忆│
 │   SNOWBALL.md 持久记忆注入                                │
@@ -50,7 +50,7 @@
 
 - macOS（Mac Mini M4 推荐）
 - Python 3.11+
-- [Ollama](https://ollama.ai) 已安装并运行 `qwen3:14b` 模型
+- [Ollama](https://ollama.ai) (0.17.1+) 已安装并运行 `qwen3.5:9b` 模型
 
 ### 安装
 
@@ -63,7 +63,7 @@ cd snowball
 pip install -r requirements.txt
 
 # 拉取 Ollama 模型
-ollama pull qwen3:14b
+ollama pull qwen3.5:9b
 ```
 
 ### 运行
@@ -88,7 +88,7 @@ python main.py --voice
 ```yaml
 agent:
   base_url: http://localhost:11434/v1   # Ollama 地址
-  model: qwen3:14b                      # LLM 模型（推荐 14b，8b 也可用）
+  model: qwen3.5:9b                     # LLM 模型（推荐，多模态+工具调用强）
   max_tool_iterations: 10
 
 voice_in:

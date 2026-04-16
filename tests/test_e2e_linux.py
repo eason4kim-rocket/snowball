@@ -199,7 +199,7 @@ class TestMainStartup:
 
         config = load_config("config.yaml")
         assert config["agent"]["base_url"] == "http://localhost:11434/v1"
-        assert config["agent"]["model"] == "qwen3:14b"
+        assert config["agent"]["model"] == "qwen3.5:9b"
         assert config["voice_out"]["engine"] in ("macos_say", "edge_tts", "kokoro")
 
     def test_tts_engine_selection_edge(self):

@@ -45,7 +45,7 @@ def _get_agent() -> SnowballAgent:
         tools = create_all_tools(memory_path=memory_path)
         _agent = SnowballAgent(
             base_url=agent_cfg.get("base_url", "http://localhost:11434/v1"),
-            model=agent_cfg.get("model", "qwen3:8b"),
+            model=agent_cfg.get("model", "qwen3.5:9b"),
             max_tool_iterations=agent_cfg.get("max_tool_iterations", 10),
             memory_path=memory_path,
             tools=tools,

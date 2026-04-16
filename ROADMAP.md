@@ -26,7 +26,7 @@
 │   模块 B：Agent 大脑（可替换）                           │
 │   open-agent-sdk-python                                  │
 │                                                          │
-│   - Ollama qwen3:8b（本地 LLM）                         │
+│   - Ollama qwen3.5:9b（本地 LLM）                       │
 │   - 35 内置工具（Bash/Read/Write/Glob/Grep/Web/Agent）  │
 │   - 自定义工具（AppleScript/Fazm/Mac 控制）             │
 │   - 子 Agent / MCP / Hook / 会话持久化                  │
@@ -59,7 +59,7 @@
 | 组件 | 技术 | 说明 | 可替换为 |
 |------|------|------|----------|
 | **Agent 核心** | open-agent-sdk-python | Claude Code 架构，35 工具，Ollama 原生支持 | open-agent-sdk-typescript |
-| **LLM** | Ollama + qwen3:8b | 本地，M4 24GB 流畅 | 任意 OpenAI-compatible |
+| **LLM** | Ollama + qwen3.5:9b | 本地，M4 24GB 流畅，多模态+工具调用强 | 任意 OpenAI-compatible |
 | **语音识别** | RealtimeSTT（faster-whisper + Silero VAD） | 一行代码 always-listening | whisper.cpp / MLX Whisper |
 | **语音合成** | RealtimeTTS（macOS say → Kokoro） | 先快速跑通，再换自然声音 | Kokoro / Piper / Edge TTS |
 | **电脑控制（简单）** | AppleScript + osascript | Music/Mail/Finder/Safari，秒级 | — |

@@ -20,13 +20,13 @@ _SENTENCE_END_RE = re.compile(r'[。！？、.!?;\n]')
 class SnowballAgent(AgentBase):
     """雪球的 Agent 实现，封装 open-agent-sdk"""
 
-    # 每条消息大约占 200-500 token，qwen3:8b 上下文窗口 8192
+    # 每条消息大约占 200-500 token，qwen3.5:9b 上下文窗口 262144
     DEFAULT_MAX_HISTORY_TURNS: int = 20
 
     def __init__(
         self,
         base_url: str = "http://localhost:11434/v1",
-        model: str = "qwen3:8b",
+        model: str = "qwen3.5:9b",
         max_tool_iterations: int = 10,
         memory_path: str = "SNOWBALL.md",
         tools: list | None = None,

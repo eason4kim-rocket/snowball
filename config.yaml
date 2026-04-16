@@ -2,7 +2,7 @@
 
 agent:
   base_url: http://localhost:11434/v1
-  model: qwen3:14b
+  model: qwen3.5:9b
   max_tool_iterations: 10
 
 voice_in:
