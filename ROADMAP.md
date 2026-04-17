@@ -1,7 +1,10 @@
 # 雪球（Snowball）架构路线图
 
 ## 一句话定义
-**完全本地的贾维斯**：说话 → 听懂 → 用 Ollama 大脑思考 → 用 Fazm 操纵 Mac → 用语音回答你。
+**完全本地的贾维斯**：说话 → 听懂 → 用 Ollama 大脑思考 → 用 AppleScript + Accessibility API 操纵 Mac → 用语音回答你。
+
+> **当前状态**：Phase 1–4 已完成 ✅，92 个单元测试全过。Fazm 已由原生工具链（AppleScript + Accessibility + MacControl + MusicControl）完全取代，不再依赖外部 App。
+
 
 ---
 
@@ -28,9 +31,16 @@
 │                                                          │
 │   - Ollama qwen3.5:9b（本地 LLM）                       │
 │   - 35 内置工具（Bash/Read/Write/Glob/Grep/Web/Agent）  │
-│   - 自定义工具（AppleScript/Fazm/Mac 控制）             │
-│   - 子 Agent / MCP / Hook / 会话持久化                  │
-│   - SNOWBALL.md 记忆注入                                 │
+│   - 7 个自定义工具：                                     │
+│     · AppleScript（Music/Mail/Finder/Safari）           │
+│     · AccessibilityControl（任意 App 的 UI 控制）       │
+│     · MacControl（音量/亮度/窗口/睡眠）                 │
+│     · MusicControl（AlgerMusicPlayer 专用）             │
+│     · ReadMemory/WriteMemory/SearchMemory               │
+│   - SafetyGuard Hook（高危操作确认）                    │
+│   - 流式输出（chat_stream 按句 yield 给 TTS）           │
+│   - 历史修剪（user 边界切，tool 配对不破坏）            │
+│   - SNOWBALL.md 记忆注入（hash 缓存）                   │
 │                                                          │
 │   LLM 决策 ──► 调工具 ──► 看结果 ──► 继续/结束         │
 └──────────────────────┬───────────────────────────────────┘
@@ -52,6 +62,11 @@
 - 模块 A/C 可替换为其他 STT/TTS 引擎
 - 工具层可热插拔（define_tool / MCP Server）
 
+**额外能力**：
+- 🖥️ Web Dashboard（FastAPI + WebSocket）— 浏览器可视化对话/工具调用/记忆
+- 🎙️ 唤醒词检测（"雪球 / snowball"，可配置）
+- 🔁 工具重试 + 不可恢复错误跳过（`_NON_RETRIABLE_ERROR_KINDS`）
+
 ---
 
 ## 技术栈
@@ -63,125 +78,119 @@
 | **语音识别** | RealtimeSTT（faster-whisper + Silero VAD） | 一行代码 always-listening | whisper.cpp / MLX Whisper |
 | **语音合成** | RealtimeTTS（macOS say → Kokoro） | 先快速跑通，再换自然声音 | Kokoro / Piper / Edge TTS |
 | **电脑控制（简单）** | AppleScript + osascript | Music/Mail/Finder/Safari，秒级 | — |
-| **电脑控制（复杂）** | Fazm App（分布式通知） | Claude Computer Use，精准但需联网 | pyobjc / pyautogui |
-| **持久记忆** | SNOWBALL.md | 偏好、联系人、习惯 | SQLite / 向量数据库 |
-
----
-
-## Fazm 集成方式
-
-Fazm 是 macOS 桌面 App（Swift/SwiftUI），从 Python 控制它：
-
-### 方式 1：分布式通知（零依赖）
-```bash
-# 发命令给 Fazm
-xcrun swift -e 'import Foundation; DistributedNotificationCenter.default().postNotificationName(
-  .init("com.fazm.control"), object: nil,
-  userInfo: ["command": "sendFollowUp:打开音乐"],
-  deliverImmediately: true
-); RunLoop.current.run(until: Date(timeIntervalSinceNow: 1.0))'
-
-# 读取状态
-xcrun swift -e '... ["command": "getState"] ...'
-cat /tmp/fazm-control-state.json
-```
-
-### 方式 2：直接注入查询
-```bash
-xcrun swift -e 'import Foundation; DistributedNotificationCenter.default().postNotificationName(
-  .init("com.fazm.testQuery"), object: nil,
-  userInfo: ["text": "打开音乐播放周杰伦"],
-  deliverImmediately: true
-); RunLoop.current.run(until: Date(timeIntervalSinceNow: 1.0))'
-```
-
-### 集成策略
-```
-简单指令（打开App/播放音乐/发邮件）
-  → AppleScript（最快，< 1 秒，全本地）
-
-复杂 GUI 操作（点击按钮/填表单/跨App操作）
-  → Fazm 分布式通知（需联网，但精准）
-```
+| **电脑控制（通用 GUI）** | AccessibilityControl（osascript + System Events） | 任意 App 的按钮/菜单/输入框，零外部依赖 | pyobjc AX API（见底部 C 方案）|
+| **电脑控制（系统级）** | MacControl | 音量/亮度/窗口/睡眠 | — |
+| **音乐播放** | MusicControl | AlgerMusicPlayer 搜索/切歌/音量 | Apple Music AppleScript |
+| **持久记忆** | SNOWBALL.md + 工具 3 件套 | 读/写/搜索 | SQLite / 向量数据库 |
+| **Web Dashboard** | FastAPI + WebSocket | 浏览器实时查看对话与工具调用 | Gradio / Streamlit |
+| **安全网** | SafetyGuard Hook | 高危操作弹窗确认（删除/邮件/睡眠等） | — |
 
 ---
 
 ## 开发路线（4 个阶段）
 
-### Phase 1 — Agent 核心（纯文字，终端交互）
+> 所有 Phase 均已完成。保留作为实现记录。
+
+### Phase 1 — Agent 核心（纯文字，终端交互）✅
 > 目标：雪球能在终端里接收文字命令，调用工具真正操控电脑
 
-- [ ] 安装 open-agent-sdk-python（`pip install open-agent-sdk`）
-- [ ] 配置 Ollama 接入（`base_url=http://localhost:11434/v1`）
-- [ ] 写雪球 System Prompt + SNOWBALL.md 记忆
-- [ ] 实现自定义工具：AppleScript（Music/Mail/Finder）、Fazm 控制
-- [ ] 终端交互测试："打开音乐"→ 雪球用工具执行
-- **验收**：终端输入"打开 Music 放周杰伦"，它真的打开并播放
+- [x] 安装 open-agent-sdk-python
+- [x] 配置 Ollama 接入（`base_url=http://localhost:11434/v1`）
+- [x] 写雪球 System Prompt + SNOWBALL.md 记忆
+- [x] 实现自定义工具：AppleScript/AccessibilityControl/MacControl/MusicControl
+- [x] 终端交互测试通过
+- **验收达成**：终端输入"打开 Music 放周杰伦"正确执行
 
-### Phase 2 — 加语音输入
+### Phase 2 — 加语音输入 ✅
 > 目标：说话，雪球听到并处理
 
-- [ ] pip install RealtimeSTT
-- [ ] 模块 A 封装：always-listening（无需唤醒词）
-- [ ] 语音 → 文字 → 传入 Agent
-- **验收**：对着麦克风说命令，雪球正确执行
+- [x] RealtimeSTT 接入
+- [x] 模块 A 封装：always-listening + VAD
+- [x] 唤醒词检测（"雪球 / snowball"）
+- [x] 语音 → 文字 → 传入 Agent
+- **验收达成**：对着麦克风说命令，雪球正确执行
 
-### Phase 3 — 加语音输出
+### Phase 3 — 加语音输出 ✅
 > 目标：雪球用声音回复你
 
-- [ ] pip install RealtimeTTS
-- [ ] 模块 C 封装：macOS `say`（中文 Ting-Ting）
-- [ ] 语音回复自动截短（1-2 句话）
-- [ ] 主循环打通：说话 → 执行 → 语音回复
-- **验收**：完整对话"雪球打开音乐"→ "好的老大，为您播放"
+- [x] macOS `say`（默认、零依赖）
+- [x] Edge TTS（在线，自然中文）
+- [x] Kokoro TTS（本地，最自然）
+- [x] 流式输出（`chat_stream` 按句 yield 给 TTS，边想边说）
+- [x] 主循环打通：说话 → 执行 → 语音回复
+- **验收达成**：完整对话"雪球打开音乐"→ "好的老大，为您播放"
 
-### Phase 4 — 优化升级
+### Phase 4 — 优化升级 ✅
 > 目标：更自然、更快、更聪明
 
-- [ ] 升级 TTS → Kokoro TTS（更自然的声音）
-- [ ] SNOWBALL.md 记忆自动更新（记住偏好）
-- [ ] 子 Agent（复杂多步任务并行）
-- [ ] 延迟优化（简单指令 < 1.5 秒）
-- [ ] 更多工具：日历、提醒事项、截图分析
-- [ ] 考虑替换为 open-agent-sdk-typescript（如需更高性能）
+- [x] TTS 多引擎可切换（say / edge_tts / kokoro）
+- [x] SNOWBALL.md 记忆读写（ReadMemory / WriteMemory / SearchMemory 三件套）
+- [x] 流式输出 + Hook + 会话持久化（by open-agent-sdk）
+- [x] 工具重试机制（`with_retry` 装饰器 + 不可恢复错误跳过）
+- [x] SafetyGuard（高危操作确认，async 不阻塞事件循环）
+- [x] Web Dashboard（FastAPI + WebSocket 实时可视化）
+- [x] 历史修剪（按 user 边界切分，tool_use/result 配对不被破坏）
+- [x] AccessibilityControl（替代 Fazm，原生零依赖的通用 GUI 控制）
+- [ ] 子 Agent（复杂多步任务并行）— 延后
+- [ ] 更多工具：日历、提醒事项、截图分析 — 延后
+- [ ] 考虑替换为 open-agent-sdk-typescript（如需更高性能）— 延后
 
 ---
 
-## 项目文件结构
+## 项目文件结构（当前真实状态）
 
 ```
 snowball/
 ├── ROADMAP.md                  ← 这个文件
+├── README.md                   ← 安装 + 使用
 ├── SNOWBALL.md                 ← 雪球的持久记忆
-├── setup.sh                    ← 一键安装脚本
+├── setup.sh                    ← 一键安装
 ├── requirements.txt            ← Python 依赖
 ├── config.yaml                 ← 配置（模型/声音/语言等）
-├── main.py                     ← 启动入口
+├── main.py                     ← 启动入口（终端 / voice / web 三模式）
 │
 ├── modules/                    ← 模块化，每层可独立替换
 │   ├── voice_in/               ← 模块 A：语音输入
-│   │   ├── __init__.py
 │   │   ├── listener.py         ← RealtimeSTT 封装
+│   │   ├── wake_word.py        ← 唤醒词检测（"雪球 / snowball"）
 │   │   └── base.py             ← 标准接口（ABC）
 │   │
 │   ├── agent/                  ← 模块 B：Agent 大脑
-│   │   ├── __init__.py
-│   │   ├── snowball_agent.py   ← open-agent-sdk 封装
+│   │   ├── snowball_agent.py   ← open-agent-sdk 封装 + Hook + 历史修剪
 │   │   ├── system_prompt.py    ← 雪球人格 + 工具定义
 │   │   └── base.py             ← 标准接口（ABC）
 │   │
-│   └── voice_out/              ← 模块 C：语音输出
-│       ├── __init__.py
-│       ├── speaker.py          ← RealtimeTTS 封装
+│   └── voice_out/              ← 模块 C：语音输出（3 引擎）
+│       ├── speaker.py          ← macOS `say`
+│       ├── edge_speaker.py     ← Edge TTS（在线）
+│       ├── kokoro_speaker.py   ← Kokoro TTS（本地）
 │       └── base.py             ← 标准接口（ABC）
 │
-└── tools/                      ← 自定义工具（open-agent-sdk define_tool）
-    ├── __init__.py
-    ├── applescript_tool.py      ← AppleScript（Music/Mail/Finder/Safari）
-    ├── fazm_tool.py             ← Fazm 分布式通知控制
-    ├── mac_control_tool.py      ← macOS 窗口/App 控制
-    ├── screenshot_tool.py       ← screencapture 截图
-    └── memory_tool.py           ← 读写 SNOWBALL.md
+├── tools/                      ← 自定义工具（open-agent-sdk define_tool）
+│   ├── applescript_tool.py     ← AppleScript（Music/Mail/Finder/Safari）
+│   ├── accessibility_tool.py   ← 通用 GUI 控制（替代 Fazm）
+│   ├── mac_control_tool.py     ← 音量/亮度/窗口/睡眠
+│   ├── music_control_tool.py   ← AlgerMusicPlayer 专用
+│   ├── memory_tool.py          ← 读/写/搜索 SNOWBALL.md
+│   ├── fazm_tool.py            ← 旧的 Fazm 通知（已弃用，保留备份）
+│   ├── safety.py               ← SafetyGuard（高危操作确认）
+│   └── retry.py                ← with_retry 装饰器
+│
+├── web/                        ← Web Dashboard
+│   ├── app.py                  ← FastAPI + WebSocket 服务
+│   └── index.html              ← 前端
+│
+└── tests/                      ← 92 个单元测试
+    ├── test_accessibility.py / test_accessibility_fixes.py
+    ├── test_memory_tool.py
+    ├── test_wake_word.py
+    ├── test_safety.py
+    ├── test_retry.py
+    ├── test_voice_out.py
+    ├── test_trim_history.py
+    ├── test_tools_init.py
+    ├── test_config.py
+    └── test_e2e_linux.py
 ```
 
 ---
@@ -207,16 +216,35 @@ snowball/
 |------|------|------|
 | open-agent-sdk-python | Agent 核心 | `github.com/codeany-ai/open-agent-sdk-python` |
 | open-agent-sdk-typescript | Agent 核心（备选） | `github.com/codeany-ai/open-agent-sdk-typescript` |
-| Fazm | Mac 电脑控制（手脚） | `/Users/eason/Documents/skills/agent/fazm-main/` |
+| Fazm | ~~Mac 电脑控制~~（已由 AccessibilityControl 取代） | `/Users/eason/Documents/skills/agent/fazm-main/` |
 | ultraworkers/claw-code | 架构参考 | `github.com/ultraworkers/claw-code` |
 | tanbiralam/claude-code | 架构参考 | `github.com/tanbiralam/claude-code` |
 
 ---
 
-## 下一步
+## 下一步（v0.2 规划）
 
-按 Phase 1 → 2 → 3 → 4 顺序实现。
-Phase 1 只需终端 + 文字就能验证核心 Agent 能力，随时可以测试。
+Phase 1–4 已完成，下面是积累下来的 TODO，按优先级排：
+
+### 高优：真实使用后暴露的问题
+
+- [ ] **语音模式端到端实测** — Phase 2/3 只跑过单元测试，需要在你的实际麦克风 + 耳机环境试 10 条真实指令，记录失败场景
+- [ ] **voice_in 的 Ctrl+C 清理** — RealtimeSTT 后台线程退出时偶尔会卡住，需加 signal handler
+- [ ] **Web Dashboard 鉴权** — `web/app.py` 目前 `127.0.0.1` 监听，如要开 `0.0.0.0` 必须加 token，否则局域网任何人都能控你电脑
+- [ ] **AccessibilityControl 递归查找性能** — `entire contents of window N` 在元素特别多的 App（如 Excel）会慢到 > 5s，加个 `max_depth` 参数截断
+
+### 中优：体验增强
+
+- [ ] **子 Agent** — "帮我整理桌面并发邮件总结" 这种多步任务并行执行
+- [ ] **截图工具** — `screenshot_tool`（给 LLM 看屏幕，配合坐标点击）
+- [ ] **日历 / 提醒事项 AppleScript 工具**
+- [ ] **对话历史持久化** — 现在重启丢光，应该存到 `~/.snowball/sessions/`
+
+### 低优：架构演进
+
+- [ ] **AccessibilityControl 纯 pyobjc 升级（C 方案）** — 见下文专章
+- [ ] **open-agent-sdk-typescript 迁移评估** — 如果 Python 侧延迟瓶颈明显
+- [ ] **SNOWBALL.md 向量化** — 记忆条目多了后，用 embedding 做相似度检索代替关键词搜索
 
 ---
 
