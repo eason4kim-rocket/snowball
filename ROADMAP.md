@@ -248,6 +248,48 @@ Phase 1–4 已完成，下面是积累下来的 TODO，按优先级排：
 
 ---
 
+## 远期研究方向（不立即动手，记录方向）
+
+### 🧠 模型升级候选：Qwen3.6-35B-A3B
+
+背景：2026-04 Unsloth 放出 2-bit Dynamic 2.0 量化，**13 GB 内存**在 Mac mini
+就能跑，30+ 连续 tool calls 稳定，Agent 能力比 qwen3.5:9b 强一档。
+
+- **架构**：MoE，总参数 35B，激活 3B → 推理可能比当前 9B dense 还快
+- **视觉**：待确认
+  - 若确实是 VL 版（Qwen3.6-VL-35B-A3B）→ 直接整体替换 qwen3.5:9b
+  - 若是纯文本 MoE → 采用双模型路由
+    - 简单对话 / 视觉任务 → qwen3.5:9b（保留眼睛）
+    - 复杂 Agent / 长链工具 → Qwen3.6-35B-A3B（聪明大脑）
+- **运行方式**：Unsloth Studio macOS（beta）或等 Ollama 收录后的 GGUF
+- **启动条件**：当前 qwen3.5:9b 在真实对话中出现 tool 调用混乱 /
+  复杂任务推不动时，再启动迁移
+- **参考**：<https://github.com/unslothai/unsloth>
+
+### 🤖 AGI 级主动性
+
+不是 cron 调度，是 Agent **自主决定何时开口**。依赖持续思考 + 共情判断，
+当前基础模型还做不稳。等下一代模型（Qwen 4 / 持续 agent 架构 /
+Sleep-time compute）或架构突破再启动。
+
+参考方向：Anthropic Claude Always-On、Google Astra、OpenAI o3 reasoning。
+
+### 👁️ 视觉路线（v0.3 候选）
+
+- `ScreenSnapshot` 工具（Mac mini 先能用）
+- `CameraSnapshot` 工具，抽象 `source="system_default|external|iphone"`
+  - Mac mini：外接 USB 摄像头 或 Continuity Camera（iPhone 当摄像头）
+  - MacBook Air：内置 FaceTime HD
+- VLM 集成：直接用 qwen3.5:9b（已有视觉），或升级到 Qwen3.6-VL
+
+### 🛸 机器人形态（长期梦想）
+
+路径：纯软件 → 固定节点（客厅放树莓派当"耳朵眼睛"）→ 移动底盘 →
+BB-8 风格球形外壳。LLM 始终跑在 Mac 后端，机器人端只做 I/O。
+预算 ~3000 元起步（Pi5 + 麦克风阵列 + 摄像头 + 底盘）。
+
+---
+
 ## 待办 / TODO
 
 ### 🔮 AccessibilityControl 升级到纯 pyobjc（C 方案）
