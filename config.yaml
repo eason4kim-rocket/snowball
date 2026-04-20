@@ -16,8 +16,8 @@ voice_in:
 
 voice_out:
   enabled: false
-  engine: edge_tts
-  voice: zh-CN-XiaoxiaoNeural
+  engine: macos_say         # macos_say（本地最稳）/ edge_tts（在线，更自然）/ kokoro（本地神经 TTS）
+  voice: Ting-Ting          # macos_say 用；edge_tts 换成 zh-CN-XiaoxiaoNeural
   max_length: 50
 
 memory:
